@@ -12,7 +12,7 @@ parser.add_argument('--output_dir', required=True, help='Base directory where ou
 args = parser.parse_args()
 
 # Function to run the ina_speech_segmenter script with options
-def process_mp3_file(input_file, output_dir, csv_file):
+def process_mp3_file(input_file, output_dir, csv_file, station):
 		# Run the ina_speech_segmenter script with -d sm and -g false options
 		command = [
 				'ina_speech_segmenter.py',
@@ -20,12 +20,13 @@ def process_mp3_file(input_file, output_dir, csv_file):
 				'-o', output_dir,
 				'-d', 'smn',	# Option for segmenter model
 				'-g', 'false',	# Option to gender
+				'-r', '0.02',   # 좀 더 민감하게, 작은 목소리 잡기 위함함
 		]
 		subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 		# output- 이 붙은 파일에서 output- 제거
 		for file in os.listdir(output_dir):
-				if file.startswith('mbc-') and file.endswith('.csv'):
+				if file.startswith(station) and file.endswith('.csv'):
 						old_file = os.path.join(output_dir, file)
 						os.rename(old_file, csv_file)
 						break
@@ -36,27 +37,28 @@ for mp3_file in os.listdir(args.input_mp3_dir):
 		if not mp3_file.endswith('.mp3'):
 				continue
 
-		# Extract time (HHMM) from the mp3 file name (assuming time is in the format mbc-1400.mp3)
-		time_match = re.search(r'(\d{4})\.mp3$', mp3_file)	# Match the last 4 digits before ".mp3"
-		if time_match:
-				time = time_match.group(1)	# Extract time (HHMM)
+		# Extract station and time from the mp3 file name (assuming format: {station}-{time}.mp3)
+		match = re.search(r'([a-zA-Z0-9]+)-(\d{4})\.mp3$', mp3_file)
+		if match:
+				station = match.group(1)  # Extract station
+				time = match.group(2)     # Extract time (HHMM)
 
 				# Extract the date (250304) from the input_mp3_dir path, assuming the directory name is the date
 				date_dir = os.path.basename(args.input_mp3_dir)
 				print(f"{date_dir}")
 				# Define the output subdirectory based on the input directory name (e.g., 250304)
-				output_subdir = os.path.join(args.output_dir, f"mbc-{time}")
+				output_subdir = os.path.join(args.output_dir, f"{station}-{time}")
 				os.makedirs(output_subdir, exist_ok=True)
 
-				# CSV file path: /home/segments/{date}/mbc-{time}/{date}{time}.csv
-				csv_file = os.path.join(output_subdir, f"{date_dir}{time}.csv")	# e.g., /home/segments/250304/mbc-1400/2503041400.csv
+				# CSV file path: /home/segments/{date}/{station}-{time}/{date}{time}.csv
+				csv_file = os.path.join(output_subdir, f"{date_dir}{time}.csv")  # e.g., /home/segments/250304/mbc-1400/2503041400.csv
 
 				# Full path to the input MP3 file
 				input_mp3_path = os.path.join(args.input_mp3_dir, mp3_file)	# e.g., /home/input/250304/mbc-1400.mp3
 
 				# Process the MP3 file with the segmenter and the additional options
 				print(f"Processing: {input_mp3_path} -> {csv_file}")	# Debug output to confirm paths
-				process_mp3_file(input_mp3_path, output_subdir, csv_file)	# Process the file
+				process_mp3_file(input_mp3_path, output_subdir, csv_file, station)	# Process the file
 
 		else:
 				print(f"Skipping {mp3_file}, no valid time found in the filename.")
